@@ -9,7 +9,12 @@ The Reduced Basis Method
 ------------------------
 
 
-The RB method has been also implemented within the MOOSE framework. Our implementation is primarily based on the rbOOmit package provided by libMesh. Although we are using the RB method for approximating the FE space, the method in general is independent of the discretisation scheme. In the following, we consider a problem of the form (\ref{PDE}) for explaining the background theory \cite{prud'homme2002, hesthaven2016}:
+```math
+SE = \frac{\sigma}{\sqrt{n}}
+```
+
+The RB method has been also implemented within the MOOSE framework. Our implementation is primarily based on the rbOOmit package provided by libMesh. Although we are using the RB method for approximating the FE space, the method in general is independent of the discretisation scheme. In the following, we consider a problem of the form general PDE form for explaining the background theory:
+
 
 \begin{equation}
 a(u(\mu),v;\mu)=f(v;\mu), \qquad	\forall v \in X,
