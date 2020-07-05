@@ -30,6 +30,7 @@ InputParameters validParams<DwarfElephantOfflineOnlineStageSteadyState>()
     params.addParam<bool>("norm_online_values", false, "Determines wether online parameters are normed.");
     params.addParam<bool>("load_basis_function", false, "Set to true if you want to load a basis function.");
     params.addParam<bool>("write_output", true, "Stores the offline data.");
+    params.addParam<bool>("only_assembly", false, "Only the matricies and vectors are assembled. The RB algorithm is not excuted.");
     params.addParam<unsigned int>("norm_id", 0, "Defines the id of the parameter that will be used for the normalization.");
     params.addParam<unsigned int>("n_outputs", 1, "Defines the number of outputs.");
     params.addParam<unsigned int>("online_N", 0, "Defines the dimension of the online stage.");
@@ -61,6 +62,7 @@ DwarfElephantOfflineOnlineStageSteadyState::DwarfElephantOfflineOnlineStageStead
     _norm_online_values(getParam<bool>("norm_online_values")),
     _load_basis_function(getParam<bool>("load_basis_function")),
     _write_output(getParam<bool>("write_output")),
+    _only_assembly(getParam<bool>("only_assembly")),
     _norm_id(getParam<unsigned int>("norm_id")),
     _n_outputs(getParam<unsigned int>("n_outputs")),
     _online_N(getParam<unsigned int>("online_N")),
@@ -81,18 +83,26 @@ DwarfElephantOfflineOnlineStageSteadyState::DwarfElephantOfflineOnlineStageStead
 {
   if(_online_stage==true & _online_mu_parameters.size()==0)
     mooseError("You have not defined the online parameters.");
+
+  /* If only the matricies are assembled the online_stage has to be set to false
+  * since no offline stage has been exectuded priorly.
+  */
+  if(_only_assembly && _online_stage)
+    _online_stage = false;
 }
 
 void
 DwarfElephantOfflineOnlineStageSteadyState::setAffineMatrices()
 {
-   _initialize_rb_system.getInnerProductMatrix() -> close();
+   _initialize_rb_system.getInnerProductMatrix()->close();
     for(unsigned int _q=0; _q<_initialize_rb_system.getQa(); _q++)
     {
-      _rb_problem->rbAssembly(_q).setCachedJacobianContributions(*_initialize_rb_system.getJacobianSubdomain()[_q]);
-      _initialize_rb_system.getJacobianSubdomain()[_q] ->close();
+      _rb_problem->rbAssembly().setCachedJacobianContributions(*_initialize_rb_system.getJacobianSubdomain()[_q],_q);
+
+      _initialize_rb_system.getJacobianSubdomain()[_q]->close();
       _initialize_rb_system.getInnerProductMatrix()->add(_mu_bar, *_initialize_rb_system.getJacobianSubdomain()[_q]);
     }
+
 }
 
 void
@@ -102,7 +112,7 @@ DwarfElephantOfflineOnlineStageSteadyState::transferAffineVectors()
     // Transfer the data for the F vectors.
     for(unsigned int _q=0; _q<_initialize_rb_system.getQf(); _q++)
     {
-      _rb_problem->rbAssembly(_q).setCachedResidual(*_initialize_rb_system.getResiduals()[_q]);
+      _rb_problem->rbAssembly().setCachedResidual(*_initialize_rb_system.getResiduals()[_q],_q);
       _initialize_rb_system.getResiduals()[_q]->close();
     }
 
@@ -187,31 +197,14 @@ DwarfElephantOfflineOnlineStageSteadyState::execute()
       if(_skip_matrix_assembly_in_rb_system)
         setAffineMatrices();
 
-
-    // TODO: add a function to extract matricies and vectors for further RB analyses
-    //   SparseMatrix<Number> * _aq0 = _rb_con_ptr->get_Aq(0);
-    //     _aq0->print_matlab("Aq0");
-    //   SparseMatrix<Number> * _aq1 = _rb_con_ptr->get_Aq(1);
-    //       _aq1->print_matlab("Aq1");
-    //   SparseMatrix<Number> * _aq2 = _rb_con_ptr->get_Aq(2);
-    //       _aq2->print_matlab("Aq2");
-    //   SparseMatrix<Number> * _aq3 = _rb_con_ptr->get_Aq(3);
-    //       _aq3->print_matlab("Aq3");
-    //   SparseMatrix<Number> * _aq4 = _rb_con_ptr->get_Aq(4);
-    //       _aq4->print_matlab("Aq4");
-    //   SparseMatrix<Number> * _aq5 = _rb_con_ptr->get_Aq(5);
-    //       _aq5->print_matlab("Aq5");
-    //
-    // SparseMatrix<Number> * _inner = _rb_con_ptr->get_inner_product_matrix();
-    //             _inner->print_matlab("InnerProductMatrix");
-
-      // NumericVector<Number> * _fq0 = _rb_con_ptr->get_Fq(0);
-      //   _fq0->print_matlab("Fq0");
-
       // Perform the offline stage.
-      _console << std::endl;
-      offlineStage();
-      _console << std::endl;
+      if(!_only_assembly)
+      {
+        // Perform the offline stage.
+        _console << std::endl;
+        offlineStage();
+        _console << std::endl;
+      }
     }
 
     if(_online_stage)
